@@ -69,7 +69,6 @@ Python 3.10+
 Git
 
 1. リポジトリをクローン
-git clone <this-repository>
 git clone https://github.com/Maho1100/growth-loop-engine.git
 cd growth-loop-engine
 
