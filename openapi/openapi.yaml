@@ -1,0 +1,236 @@
+openapi: "3.1.0"
+info:
+  title: Growth Loop Engine API
+  description: イベント追跡・分析基盤 API
+  version: "0.1.0"
+
+servers:
+  - url: https://api.example.com/v1
+    description: 本番環境
+  - url: http://localhost:8080/v1
+    description: ローカル開発環境
+
+paths:
+  /events:
+    post:
+      summary: イベント送信（単一）
+      operationId: trackEvent
+      tags: [イベント]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "202":
+          description: 受理済み
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: リクエスト不正
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      summary: イベント検索・取得
+      operationId: queryEvents
+      tags: [イベント]
+      parameters:
+        - name: event_name
+          in: query
+          schema:
+            type: string
+          description: イベント名でフィルタ
+        - name: user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: ユーザーIDでフィルタ
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 開始日時
+        - name: until
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 終了日時
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+          description: 取得件数上限
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventListResponse"
+
+  /events/batch:
+    post:
+      summary: イベント一括送信
+      operationId: trackEventsBatch
+      tags: [イベント]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/EventInput"
+                  maxItems: 500
+      responses:
+        "202":
+          description: 受理済み
+
+  /identify:
+    post:
+      summary: ユーザー識別・属性更新
+      operationId: identifyUser
+      tags: [ユーザー]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentifyInput"
+      responses:
+        "200":
+          description: 成功
+
+  /health:
+    get:
+      summary: ヘルスチェック
+      operationId: healthCheck
+      tags: [システム]
+      responses:
+        "200":
+          description: 正常
+
+components:
+  schemas:
+    EventInput:
+      type: object
+      required: [event_name]
+      properties:
+        event_name:
+          type: string
+          description: イベント名
+          example: page.viewed
+        user_id:
+          type: string
+          format: uuid
+          description: ユーザーID
+        session_id:
+          type: string
+          format: uuid
+          description: セッションID
+        properties:
+          type: object
+          description: イベント固有プロパティ
+          example:
+            url: "https://example.com/pricing"
+            referrer: "https://google.com"
+        timestamp:
+          type: string
+          format: date-time
+          description: イベント発生日時（省略時はサーバー受信時刻）
+
+    IdentifyInput:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        traits:
+          type: object
+          description: ユーザー属性
+          example:
+            plan: premium
+            company: "Example Inc."
+
+    SuccessResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INVALID_EVENT
+            message:
+              type: string
+              example: "event_name は必須です"
+
+    EventListResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventOutput"
+
+    EventOutput:
+      type: object
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_name:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        properties:
+          type: object
+        occurred_at:
+          type: string
+          format: date-time
+        received_at:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - ApiKeyAuth: []
