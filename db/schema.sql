@@ -1,49 +1,47 @@
--- Growth Loop Engine データベーススキーマ
--- 対象DB: PostgreSQL 15+
+-- Migration: 001_create_tables.sql
 
--- ===========================================
--- 拡張機能
--- ===========================================
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+BEGIN;
 
--- ===========================================
--- users: ユーザーマスタ
--- ===========================================
-CREATE TABLE IF NOT EXISTS users (
-    user_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    external_id VARCHAR(255),
-    traits      JSONB DEFAULT '{}',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 1. users
+CREATE TABLE users (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    external_id   VARCHAR(255) UNIQUE,
+    display_name  VARCHAR(100),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_users_external_id ON users (external_id);
-
--- ===========================================
--- sessions: セッション
--- ===========================================
-CREATE TABLE IF NOT EXISTS sessions (
-    session_id  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id     UUID REFERENCES users(user_id),
-    started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ended_at    TIMESTAMPTZ
+-- 2. activities
+CREATE TABLE activities (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES users(id),
+    slug        VARCHAR(100) NOT NULL,
+    title       VARCHAR(255),
+    metadata    JSONB       NOT NULL DEFAULT '{}',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, slug)
 );
 
-CREATE INDEX idx_sessions_user_id ON sessions (user_id);
-
--- ===========================================
--- events: イベントログ
--- ===========================================
-CREATE TABLE IF NOT EXISTS events (
-    event_id    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    event_name  VARCHAR(255) NOT NULL,
-    user_id     UUID REFERENCES users(user_id),
-    session_id  UUID REFERENCES sessions(session_id),
-    properties  JSONB DEFAULT '{}',
-    occurred_at TIMESTAMPTZ NOT NULL,
-    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 3. events
+CREATE TABLE events (
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID         NOT NULL REFERENCES users(id),
+    activity_id   UUID         REFERENCES activities(id),
+    event_type    VARCHAR(100) NOT NULL,
+    payload       JSONB        NOT NULL DEFAULT '{}',
+    occurred_at   TIMESTAMPTZ  NOT NULL,
+    received_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_events_user_id ON events (user_id);
-CREATE INDEX idx_events_event_name ON events (event_name);
-CREATE INDEX idx_events_occurred_at ON events (occurred_at);
+CREATE INDEX idx_events_user_occurred
+    ON events (user_id, occurred_at DESC);
+
+CREATE INDEX idx_events_user_type
+    ON events (user_id, event_type, occurred_at DESC);
+
+CREATE INDEX idx_events_activity
+    ON events (activity_id, occurred_at DESC)
+    WHERE activity_id IS NOT NULL;
+
+COMMIT;
